@@ -134,6 +134,7 @@ class AttributionMethod(object):
         feed_dict[self.Y] = ys if ys is not None else np.ones([1,] + self.Y_shape[1:])
 
         if self.keras_learning_phase is not None:
+            # set training to eval mode
             feed_dict[self.keras_learning_phase] = 0
         return self.session.run(T, feed_dict)
 
@@ -352,7 +353,7 @@ class DeepLIFTRescale(GradientBasedMethod):
 
     def get_symbolic_attribution(self):
         return [g * (x - b) for g, x, b in zip(
-            tf.gradients(self.T, self.X),
+            tf.gradients(self.T, self.X[0]),
             self.X if self.has_multiple_inputs else [self.X],
             self.baseline if self.has_multiple_inputs else [self.baseline])]
 
@@ -376,8 +377,11 @@ class DeepLIFTRescale(GradientBasedMethod):
         g = tf.get_default_graph()
         for op in g.get_operations():
             if len(op.inputs) > 0 and not op.name.startswith('gradients'):
-                if op.type in SUPPORTED_ACTIVATIONS:
+                if op.type  in SUPPORTED_ACTIVATIONS:
                     ops.append(op)
+                else:
+                    print(op)
+
         YR = self._session_run([o.inputs[0] for o in ops], self.baseline)
         for (r, op) in zip(YR, ops):
             self._deeplift_ref[op.name] = r
@@ -620,9 +624,9 @@ class DeepExplain(object):
         return method
 
     def explain(self, method, T, X, xs, ys=None, batch_size=None, **kwargs):
+        print('Method')
         explainer = self.get_explainer(method, T, X, **kwargs)
         return explainer.run(xs, ys, batch_size)
-
     @staticmethod
     def get_override_map():
         return dict((a, 'DeepExplainGrad') for a in SUPPORTED_ACTIVATIONS)
